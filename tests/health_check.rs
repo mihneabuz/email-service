@@ -1,24 +1,12 @@
-use std::net::TcpListener;
+mod common;
 
 use reqwest::Client;
 
-async fn spawn_app() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("failed to bind random port");
-
-    let port = listener
-        .local_addr()
-        .expect("failed to get local_addr")
-        .port();
-
-    let app = email_service::run(listener);
-    let _ = tokio::spawn(app);
-
-    format!("http://127.0.0.1:{}", port)
-}
+use common::spawn_app;
 
 #[tokio::test]
 async fn health_check_works() {
-    let address = spawn_app().await;
+    let address = spawn_app().await.address;
     let client = Client::new();
 
     let response = client
