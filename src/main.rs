@@ -1,9 +1,9 @@
 use std::net::{SocketAddr, TcpListener};
 
 use anyhow::Result;
+use sqlx::PgPool;
 
 use email_service::{configuration::get_configuration, startup::run};
-use sqlx::PgPool;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,6 +13,8 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(address)?;
 
     let connection = PgPool::connect(&config.database.connection_string()).await?;
+
+    tracing_subscriber::fmt::init();
 
     run(listener, connection).await
 }
