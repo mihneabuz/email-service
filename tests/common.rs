@@ -1,8 +1,20 @@
 use std::net::TcpListener;
 
-use email_service::configuration::{get_configuration, DatabaseSettings};
+use email_service::{
+    configuration::{get_configuration, DatabaseSettings},
+    telemetry,
+};
+use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use ulid::Ulid;
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    if std::env::var("TEST_LOG").is_ok() {
+        telemetry::init_subscriber(std::io::stdout);
+    } else {
+        telemetry::init_subscriber(std::io::sink);
+    }
+});
 
 pub struct TestApp {
     pub address: String,
@@ -10,6 +22,8 @@ pub struct TestApp {
 }
 
 pub async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("failed to bind random port");
 
     let port = listener
