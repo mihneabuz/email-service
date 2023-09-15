@@ -19,7 +19,7 @@ use ulid::Ulid;
 
 use crate::routes;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct MakeUlidRequestId;
 
 impl MakeRequestId for MakeUlidRequestId {
@@ -33,11 +33,7 @@ impl MakeRequestId for MakeUlidRequestId {
 pub async fn run(listener: TcpListener, connection: PgPool) -> Result<()> {
     let trace_layer = TraceLayer::new_for_http()
         .on_request(DefaultOnRequest::new().level(tracing::Level::INFO))
-        .make_span_with(
-            DefaultMakeSpan::new()
-                .include_headers(true)
-                .level(tracing::Level::INFO),
-        )
+        .make_span_with(DefaultMakeSpan::new().include_headers(true).level(tracing::Level::INFO))
         .on_response(
             DefaultOnResponse::new()
                 .include_headers(true)
@@ -49,7 +45,7 @@ pub async fn run(listener: TcpListener, connection: PgPool) -> Result<()> {
         .route("/subscriptions", post(routes::subscribe))
         .layer(
             ServiceBuilder::new()
-                .set_x_request_id(MakeUlidRequestId::default())
+                .set_x_request_id(MakeUlidRequestId)
                 .layer(trace_layer)
                 .propagate_x_request_id(),
         )
@@ -57,9 +53,7 @@ pub async fn run(listener: TcpListener, connection: PgPool) -> Result<()> {
 
     info!("starting server");
 
-    Server::from_tcp(listener)?
-        .serve(app.into_make_service())
-        .await?;
+    Server::from_tcp(listener)?.serve(app.into_make_service()).await?;
 
     Ok(())
 }

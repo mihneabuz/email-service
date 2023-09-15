@@ -1,20 +1,19 @@
-use std::net::{SocketAddr, TcpListener};
+use std::net::TcpListener;
 
-use anyhow::Result;
 use sqlx::PgPool;
 
 use email_service::{configuration::get_configuration, startup::run, telemetry};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
     telemetry::init_subscriber(std::io::stdout);
 
     let config = get_configuration().expect("failed to read configuration");
 
-    let address = SocketAddr::from(([127, 0, 0, 1], config.port));
-    let listener = TcpListener::bind(address)?;
+    let address = format!("{}:{}", config.application.host, config.application.port);
+    let listener = TcpListener::bind(address).expect("failed to bind listener");
 
-    let connection = PgPool::connect(&config.database.connection_string()).await?;
+    let connection = PgPool::connect_lazy(&config.database.connection_string()).expect("failed to connect to postgres");
 
-    run(listener, connection).await
+    run(listener, connection).await.expect("server failed");
 }

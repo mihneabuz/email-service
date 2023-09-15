@@ -26,10 +26,7 @@ pub async fn spawn_app() -> TestApp {
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("failed to bind random port");
 
-    let port = listener
-        .local_addr()
-        .expect("failed to get local_addr")
-        .port();
+    let port = listener.local_addr().expect("failed to get local_addr").port();
 
     let mut config = get_configuration().expect("failed to read configuration");
     config.database.database_name = Ulid::new().to_string();

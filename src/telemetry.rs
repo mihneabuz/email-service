@@ -6,8 +6,7 @@ pub fn get_subscriber<S>(name: String, env_filter: String, sink: S) -> impl Subs
 where
     S: for<'a> MakeWriter<'a> + Send + Sync + 'static,
 {
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
     let formatting_layer = BunyanFormattingLayer::new(name, sink);
     Registry::default()
         .with(env_filter)

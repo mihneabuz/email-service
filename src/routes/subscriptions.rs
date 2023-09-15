@@ -14,10 +14,7 @@ pub struct SubscribeData {
     email: String,
 }
 
-pub async fn subscribe(
-    State(pool): State<Arc<PgPool>>,
-    Form(form): Form<SubscribeData>,
-) -> StatusCode {
+pub async fn subscribe(State(pool): State<Arc<PgPool>>, Form(form): Form<SubscribeData>) -> StatusCode {
     info!("new subscriber {} <{}>", form.name, form.email);
 
     let result = sqlx::query!(
