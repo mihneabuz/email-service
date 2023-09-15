@@ -8,6 +8,8 @@ use sqlx::PgPool;
 use tracing::{error, info, warn};
 use ulid::Ulid;
 
+use crate::domain::{NewSubscriber, SubscriberName};
+
 #[derive(Deserialize)]
 pub struct SubscribeData {
     name: String,
@@ -17,21 +19,17 @@ pub struct SubscribeData {
 pub async fn subscribe(State(pool): State<Arc<PgPool>>, Form(form): Form<SubscribeData>) -> StatusCode {
     info!("new subscriber {} <{}>", form.name, form.email);
 
-    let result = sqlx::query!(
-        r#"
-        INSERT INTO subscriptions (id, email, name, subscribed_at)
-        VALUES ($1, $2, $3, $4)
-        "#,
-        Uuid::from_bytes(Ulid::new().to_bytes()),
-        form.email,
-        form.name,
-        Utc::now()
-    )
-    .execute(pool.as_ref())
-    .await;
+    let Ok(name) = SubscriberName::parse(form.name) else {
+        return StatusCode::BAD_REQUEST;
+    };
 
-    match result {
-        Ok(_) => {
+    let new_subscriber = NewSubscriber {
+        email: form.email,
+        name,
+    };
+
+    match insert_subscriber(&pool, &new_subscriber).await {
+        Ok(()) => {
             info!("new subscriber saved");
             StatusCode::OK
         }
@@ -49,4 +47,21 @@ pub async fn subscribe(State(pool): State<Arc<PgPool>>, Form(form): Form<Subscri
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }
+}
+
+pub async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO subscriptions (id, email, name, subscribed_at)
+        VALUES ($1, $2, $3, $4)
+        "#,
+        Uuid::from_bytes(Ulid::new().to_bytes()),
+        sub.email.as_str(),
+        sub.name.as_ref(),
+        Utc::now()
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
