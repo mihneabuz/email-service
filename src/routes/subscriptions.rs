@@ -8,24 +8,19 @@ use sqlx::PgPool;
 use tracing::{error, info, warn};
 use ulid::Ulid;
 
-use crate::domain::{NewSubscriber, SubscriberName};
+use crate::domain::NewSubscriber;
 
 #[derive(Deserialize)]
 pub struct SubscribeData {
-    name: String,
-    email: String,
+    pub name: String,
+    pub email: String,
 }
 
 pub async fn subscribe(State(pool): State<Arc<PgPool>>, Form(form): Form<SubscribeData>) -> StatusCode {
     info!("new subscriber {} <{}>", form.name, form.email);
 
-    let Ok(name) = SubscriberName::parse(form.name) else {
+    let Ok(new_subscriber) = NewSubscriber::try_from(form) else {
         return StatusCode::BAD_REQUEST;
-    };
-
-    let new_subscriber = NewSubscriber {
-        email: form.email,
-        name,
     };
 
     match insert_subscriber(&pool, &new_subscriber).await {
@@ -56,7 +51,7 @@ pub async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<(),
         VALUES ($1, $2, $3, $4)
         "#,
         Uuid::from_bytes(Ulid::new().to_bytes()),
-        sub.email.as_str(),
+        sub.email.as_ref(),
         sub.name.as_ref(),
         Utc::now()
     )
