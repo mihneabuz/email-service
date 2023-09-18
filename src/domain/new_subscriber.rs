@@ -1,4 +1,7 @@
-use crate::{domain::{SubscriberName, SubscriberEmail}, routes::SubscribeData};
+use crate::{
+    domain::{SubscriberEmail, SubscriberName},
+    routes::SubscribeData,
+};
 
 pub struct NewSubscriber {
     pub email: SubscriberEmail,
