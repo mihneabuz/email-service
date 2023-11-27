@@ -2,7 +2,7 @@ use std::net::TcpListener;
 
 use sqlx::PgPool;
 
-use email_service::{configuration::get_configuration, startup::run, telemetry};
+use email_service::{configuration::get_configuration, email_client::EmailClient, startup::run, telemetry};
 
 #[tokio::main]
 async fn main() {
@@ -15,5 +15,12 @@ async fn main() {
 
     let connection = PgPool::connect_lazy(&config.database.connection_string()).expect("failed to connect to postgres");
 
-    run(listener, connection).await.expect("server failed");
+    let sender_email = config.email_client.sender().expect("invalid sender email address");
+    let email_client = EmailClient::new(
+        config.email_client.base_url,
+        sender_email,
+        config.email_client.authorization_token,
+    );
+
+    run(listener, connection, email_client).await.expect("server failed");
 }

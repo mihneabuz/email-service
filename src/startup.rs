@@ -17,6 +17,7 @@ use tower_http::{
 use tracing::info;
 use ulid::Ulid;
 
+use crate::email_client::EmailClient;
 use crate::routes;
 
 #[derive(Clone)]
@@ -30,7 +31,7 @@ impl MakeRequestId for MakeUlidRequestId {
     }
 }
 
-pub async fn run(listener: TcpListener, connection: PgPool) -> Result<()> {
+pub async fn run(listener: TcpListener, connection: PgPool, client: EmailClient) -> Result<()> {
     let trace_layer = TraceLayer::new_for_http()
         .on_request(DefaultOnRequest::new().level(tracing::Level::INFO))
         .make_span_with(DefaultMakeSpan::new().include_headers(true).level(tracing::Level::INFO))
@@ -49,7 +50,8 @@ pub async fn run(listener: TcpListener, connection: PgPool) -> Result<()> {
                 .layer(trace_layer)
                 .propagate_x_request_id(),
         )
-        .with_state(Arc::new(connection));
+        .with_state(Arc::new(connection))
+        .with_state(Arc::new(client));
 
     info!("starting server");
 

@@ -1,7 +1,9 @@
+use core::time;
 use std::net::TcpListener;
 
 use email_service::{
     configuration::{get_configuration, DatabaseSettings},
+    email_client::EmailClient,
     telemetry,
 };
 use once_cell::sync::Lazy;
@@ -32,7 +34,15 @@ pub async fn spawn_app() -> TestApp {
     config.database.database_name = Ulid::new().to_string();
     let connection = configure_database(&config.database).await;
 
-    let app = email_service::startup::run(listener, connection.clone());
+    let sender_email = config.email_client.sender().expect("invalid sender email address");
+    let email_client = EmailClient::with_timeout(
+        config.email_client.base_url,
+        sender_email,
+        config.email_client.authorization_token,
+        time::Duration::from_millis(200)
+    );
+
+    let app = email_service::startup::run(listener, connection.clone(), email_client);
     let _ = tokio::spawn(app);
 
     TestApp {
