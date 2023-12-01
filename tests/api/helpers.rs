@@ -1,4 +1,6 @@
 use once_cell::sync::Lazy;
+use reqwest::Client;
+use serde::Serialize;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use ulid::Ulid;
 
@@ -19,6 +21,7 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub address: String,
     pub db: PgPool,
+    pub client: Client,
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -48,6 +51,31 @@ pub async fn spawn_app() -> TestApp {
     TestApp {
         address,
         db: startup::get_connection_pool(&configuration.database).unwrap(),
+        client: Client::new(),
+    }
+}
+
+impl TestApp {
+    pub async fn post_subscriptions<T>(&self, form: &T) -> reqwest::Response
+    where
+        T: Serialize,
+    {
+        self.client
+            .post(&format!("{}/subscriptions", &self.address))
+            .form(form)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn post_subscriptions_raw(&self, body: &str) -> reqwest::Response {
+        self.client
+            .post(&format!("{}/subscriptions", &self.address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body.to_owned())
+            .send()
+            .await
+            .expect("Failed to execute request.")
     }
 }
 

@@ -33,7 +33,6 @@ impl MakeRequestId for MakeUlidRequestId {
 pub struct Application {
     app: Router,
     listener: TcpListener,
-    config: Settings,
 }
 
 pub fn get_connection_pool(database: &DatabaseSettings) -> Result<PgPool> {
@@ -82,11 +81,7 @@ impl Application {
 
         info!("starting server");
 
-        Ok(Application {
-            app,
-            listener,
-            config: configuration,
-        })
+        Ok(Application { app, listener })
     }
 
     pub fn port(&self) -> u16 {
