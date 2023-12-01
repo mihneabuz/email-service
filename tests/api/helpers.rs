@@ -1,14 +1,12 @@
-use core::time;
-use std::net::TcpListener;
-
-use email_service::{
-    configuration::{get_configuration, DatabaseSettings},
-    email_client::EmailClient,
-    telemetry,
-};
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use ulid::Ulid;
+
+use email_service::{
+    configuration::{get_configuration, DatabaseSettings},
+    startup::{self, Application},
+    telemetry,
+};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
     if std::env::var("TEST_LOG").is_ok() {
@@ -26,28 +24,30 @@ pub struct TestApp {
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
-    let listener = TcpListener::bind("127.0.0.1:0").expect("failed to bind random port");
+    // Randomise configuration to ensure test isolation
+    let configuration = {
+        let mut c = get_configuration().expect("Failed to read configuration.");
+        // Use a different database for each test case
+        c.database.database_name = Ulid::new().to_string();
+        // Use a random OS port
+        c.application.port = 0;
+        c
+    };
 
-    let port = listener.local_addr().expect("failed to get local_addr").port();
+    // Create and migrate the database
+    configure_database(&configuration.database).await;
 
-    let mut config = get_configuration().expect("failed to read configuration");
-    config.database.database_name = Ulid::new().to_string();
-    let connection = configure_database(&config.database).await;
+    let server = Application::build(configuration.clone())
+        .await
+        .expect("Failed to build Application");
 
-    let sender_email = config.email_client.sender().expect("invalid sender email address");
-    let email_client = EmailClient::with_timeout(
-        config.email_client.base_url,
-        sender_email,
-        config.email_client.authorization_token,
-        time::Duration::from_millis(200)
-    );
+    let address = format!("http://127.0.0.1:{}", server.port());
 
-    let app = email_service::startup::run(listener, connection.clone(), email_client);
-    let _ = tokio::spawn(app);
+    tokio::spawn(server.run());
 
     TestApp {
-        address: format!("http://127.0.0.1:{}", port),
-        db: connection,
+        address,
+        db: startup::get_connection_pool(&configuration.database).unwrap(),
     }
 }
 

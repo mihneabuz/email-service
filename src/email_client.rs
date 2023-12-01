@@ -28,12 +28,14 @@ impl EmailClient {
         Self::with_timeout(base_url, sender, token, time::Duration::from_secs(5))
     }
 
-    pub fn with_timeout(base_url: String, sender: SubscriberEmail, token: Secret<String>, timeout: time::Duration) -> Self {
+    pub fn with_timeout(
+        base_url: String,
+        sender: SubscriberEmail,
+        token: Secret<String>,
+        timeout: time::Duration,
+    ) -> Self {
         Self {
-            http_client: Client::builder()
-                .timeout(timeout)
-                .build()
-                .unwrap(),
+            http_client: Client::builder().timeout(timeout).build().unwrap(),
             base_url,
             sender,
             authorization_token: token,
@@ -83,7 +85,6 @@ mod tests {
     use secrecy::Secret;
     use wiremock::matchers::{any, header, header_exists, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
 
     fn subject() -> String {
         Sentence(1..2).fake()

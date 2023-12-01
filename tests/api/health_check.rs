@@ -1,8 +1,6 @@
-mod common;
-
 use reqwest::Client;
 
-use common::spawn_app;
+use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn health_check_works() {

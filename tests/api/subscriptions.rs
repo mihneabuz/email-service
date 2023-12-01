@@ -1,8 +1,6 @@
-mod common;
-
 use reqwest::Client;
 
-use common::{spawn_app, TestApp};
+use crate::helpers::{spawn_app, TestApp};
 
 #[tokio::test]
 async fn subscribe_returns_200_for_valid_form_data() {
