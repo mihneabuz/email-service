@@ -16,7 +16,10 @@ pub struct SubscribeData {
     pub email: String,
 }
 
-pub async fn subscribe(State(pool): State<Arc<PgPool>>, Form(form): Form<SubscribeData>) -> StatusCode {
+pub async fn subscribe(
+    State(pool): State<Arc<PgPool>>,
+    Form(form): Form<SubscribeData>,
+) -> StatusCode {
     info!("new subscriber {} <{}>", form.name, form.email);
 
     let Ok(new_subscriber) = NewSubscriber::try_from(form) else {

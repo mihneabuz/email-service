@@ -41,7 +41,8 @@ pub fn get_connection_pool(database: &DatabaseSettings) -> Result<PgPool> {
 
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self> {
-        let connection_pool = get_connection_pool(&configuration.database).expect("Failed to connecto to Postgres");
+        let connection_pool =
+            get_connection_pool(&configuration.database).expect("Failed to connecto to Postgres");
 
         let sender_email = configuration
             .email_client
@@ -54,13 +55,20 @@ impl Application {
             configuration.email_client.authorization_token.clone(),
         );
 
-        let address = format!("{}:{}", configuration.application.host, configuration.application.port);
+        let address = format!(
+            "{}:{}",
+            configuration.application.host, configuration.application.port
+        );
         let listener = TcpListener::bind(address)?;
         listener.set_nonblocking(true)?;
 
         let trace_layer = TraceLayer::new_for_http()
             .on_request(DefaultOnRequest::new().level(tracing::Level::INFO))
-            .make_span_with(DefaultMakeSpan::new().include_headers(true).level(tracing::Level::INFO))
+            .make_span_with(
+                DefaultMakeSpan::new()
+                    .include_headers(true)
+                    .level(tracing::Level::INFO),
+            )
             .on_response(
                 DefaultOnResponse::new()
                     .include_headers(true)

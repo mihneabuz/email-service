@@ -5,7 +5,9 @@ async fn subscribe_returns_200_for_valid_form_data() {
     let app = spawn_app().await;
 
     let (email, name) = ("ursula_le_guin@gmail.com", "le guin");
-    let response = app.post_subscriptions(&[("email", email), ("name", name)]).await;
+    let response = app
+        .post_subscriptions(&[("email", email), ("name", name)])
+        .await;
 
     assert_eq!(200, response.status().as_u16());
 
@@ -23,7 +25,9 @@ async fn subscribe_returns_409_when_email_already_subscribed() {
     let app = spawn_app().await;
 
     let (email, name) = ("ursula_le_guin@gmail.com", "le guin");
-    let response = app.post_subscriptions(&[("email", email), ("name", name)]).await;
+    let response = app
+        .post_subscriptions(&[("email", email), ("name", name)])
+        .await;
 
     assert_eq!(200, response.status().as_u16());
 
@@ -35,7 +39,9 @@ async fn subscribe_returns_409_when_email_already_subscribed() {
     assert_eq!(saved.email, email);
     assert_eq!(saved.name, name);
 
-    let response = app.post_subscriptions(&[("email", email), ("name", name)]).await;
+    let response = app
+        .post_subscriptions(&[("email", email), ("name", name)])
+        .await;
 
     assert_eq!(409, response.status().as_u16());
 }

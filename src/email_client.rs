@@ -62,7 +62,10 @@ impl EmailClient {
 
         self.http_client
             .post(url)
-            .header("X-Postmark-Server-Token", self.authorization_token.expose_secret())
+            .header(
+                "X-Postmark-Server-Token",
+                self.authorization_token.expose_secret(),
+            )
             .json(&request_body)
             .send()
             .await?
@@ -99,7 +102,12 @@ mod tests {
     }
 
     fn email_client(base_url: String) -> EmailClient {
-        EmailClient::with_timeout(base_url, email(), Secret::new(Faker.fake()), Duration::from_millis(100))
+        EmailClient::with_timeout(
+            base_url,
+            email(),
+            Secret::new(Faker.fake()),
+            Duration::from_millis(100),
+        )
     }
 
     struct SendEmailBodyMatcher;
