@@ -1,6 +1,7 @@
 use std::{net::TcpListener, sync::Arc};
 
 use anyhow::Result;
+use axum::extract::FromRef;
 use axum::http::{HeaderValue, Request};
 use axum::{
     routing::{get, post},
@@ -27,6 +28,24 @@ impl MakeRequestId for MakeUlidRequestId {
         Some(RequestId::new(
             HeaderValue::from_str(Ulid::new().to_string().as_str()).unwrap(),
         ))
+    }
+}
+
+#[derive(Clone)]
+pub struct AppState {
+    db: Arc<PgPool>,
+    email: Arc<EmailClient>,
+}
+
+impl FromRef<AppState> for Arc<PgPool> {
+    fn from_ref(input: &AppState) -> Self {
+        Arc::clone(&input.db)
+    }
+}
+
+impl FromRef<AppState> for Arc<EmailClient> {
+    fn from_ref(input: &AppState) -> Self {
+        Arc::clone(&input.email)
     }
 }
 
@@ -84,8 +103,10 @@ impl Application {
                     .layer(trace_layer)
                     .propagate_x_request_id(),
             )
-            .with_state(Arc::new(connection_pool))
-            .with_state(Arc::new(email_client));
+            .with_state(AppState {
+                db: Arc::new(connection_pool),
+                email: Arc::new(email_client),
+            });
 
         info!("starting server");
 

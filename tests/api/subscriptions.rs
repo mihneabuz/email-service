@@ -1,8 +1,20 @@
+use wiremock::{
+    matchers::{method, path},
+    Mock, ResponseTemplate,
+};
+
 use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn subscribe_returns_200_for_valid_form_data() {
     let app = spawn_app().await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
 
     let (email, name) = ("ursula_le_guin@gmail.com", "le guin");
     let response = app
@@ -23,6 +35,13 @@ async fn subscribe_returns_200_for_valid_form_data() {
 #[tokio::test]
 async fn subscribe_returns_409_when_email_already_subscribed() {
     let app = spawn_app().await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
 
     let (email, name) = ("ursula_le_guin@gmail.com", "le guin");
     let response = app
@@ -88,4 +107,23 @@ async fn subscribe_returns_400_when_fields_are_invalid() {
             error_message
         );
     }
+}
+
+#[tokio::test]
+async fn subscribe_sends_a_confirmation_email_for_valid_data() {
+    let app = spawn_app().await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    let (email, name) = ("ursula_le_guin@gmail.com", "le guin");
+    let response = app
+        .post_subscriptions(&[("email", email), ("name", name)])
+        .await;
+
+    assert_eq!(200, response.status().as_u16());
 }

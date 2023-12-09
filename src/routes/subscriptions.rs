@@ -8,7 +8,10 @@ use sqlx::PgPool;
 use tracing::{error, info, warn};
 use ulid::Ulid;
 
-use crate::domain::NewSubscriber;
+use crate::{
+    domain::{NewSubscriber, SubscriberEmail},
+    email_client::EmailClient,
+};
 
 #[derive(Deserialize)]
 pub struct SubscribeData {
@@ -18,6 +21,7 @@ pub struct SubscribeData {
 
 pub async fn subscribe(
     State(pool): State<Arc<PgPool>>,
+    State(email): State<Arc<EmailClient>>,
     Form(form): Form<SubscribeData>,
 ) -> StatusCode {
     info!("new subscriber {} <{}>", form.name, form.email);
@@ -29,7 +33,15 @@ pub async fn subscribe(
     match insert_subscriber(&pool, &new_subscriber).await {
         Ok(()) => {
             info!("new subscriber saved");
-            StatusCode::OK
+
+            match send_email(&email, new_subscriber.email).await {
+                Ok(()) => {
+                    info!("sent confirmation email");
+                    StatusCode::OK
+                }
+
+                Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            }
         }
 
         Err(sqlx::Error::Database(e)) => {
@@ -62,4 +74,15 @@ pub async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<(),
     .await?;
 
     Ok(())
+}
+
+pub async fn send_email(client: &EmailClient, recepient: SubscriberEmail) -> anyhow::Result<()> {
+    client
+        .send_email(
+            recepient,
+            "Welcome!",
+            "Welcome to our newsletter!",
+            "Welcome to our newsletter!",
+        )
+        .await
 }

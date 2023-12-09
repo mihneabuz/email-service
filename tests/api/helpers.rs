@@ -3,6 +3,7 @@ use reqwest::Client;
 use serde::Serialize;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use ulid::Ulid;
+use wiremock::MockServer;
 
 use email_service::{
     configuration::{get_configuration, DatabaseSettings},
@@ -21,11 +22,14 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub address: String,
     pub db: PgPool,
-    pub client: Client,
+    pub http_client: Client,
+    pub email_server: MockServer,
 }
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
+
+    let email_server = MockServer::start().await;
 
     // Randomise configuration to ensure test isolation
     let configuration = {
@@ -34,6 +38,8 @@ pub async fn spawn_app() -> TestApp {
         c.database.database_name = Ulid::new().to_string();
         // Use a random OS port
         c.application.port = 0;
+        // Use the mock server as email API
+        c.email_client.base_url = email_server.uri();
         c
     };
 
@@ -51,16 +57,14 @@ pub async fn spawn_app() -> TestApp {
     TestApp {
         address,
         db: startup::get_connection_pool(&configuration.database).unwrap(),
-        client: Client::new(),
+        http_client: Client::new(),
+        email_server,
     }
 }
 
 impl TestApp {
-    pub async fn post_subscriptions<T>(&self, form: &T) -> reqwest::Response
-    where
-        T: Serialize,
-    {
-        self.client
+    pub async fn post_subscriptions<T: Serialize>(&self, form: &T) -> reqwest::Response {
+        self.http_client
             .post(&format!("{}/subscriptions", &self.address))
             .form(form)
             .send()
@@ -69,7 +73,7 @@ impl TestApp {
     }
 
     pub async fn post_subscriptions_raw(&self, body: &str) -> reqwest::Response {
-        self.client
+        self.http_client
             .post(&format!("{}/subscriptions", &self.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body.to_owned())
