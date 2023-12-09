@@ -8,10 +8,7 @@ use sqlx::PgPool;
 use tracing::{error, info, warn};
 use ulid::Ulid;
 
-use crate::{
-    domain::{NewSubscriber, SubscriberEmail},
-    email_client::EmailClient,
-};
+use crate::{domain::NewSubscriber, email_client::EmailClient};
 
 #[derive(Deserialize)]
 pub struct SubscribeData {
@@ -34,7 +31,7 @@ pub async fn subscribe(
         Ok(()) => {
             info!("new subscriber saved");
 
-            match send_email(&email, new_subscriber.email).await {
+            match send_email(&email, &new_subscriber).await {
                 Ok(()) => {
                     info!("sent confirmation email");
                     StatusCode::OK
@@ -63,7 +60,7 @@ pub async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<(),
     sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at, status)
-        VALUES ($1, $2, $3, $4, 'confirmed')
+        VALUES ($1, $2, $3, $4, 'pending_confirmation')
         "#,
         Uuid::from_bytes(Ulid::new().to_bytes()),
         sub.email.as_ref(),
@@ -76,13 +73,20 @@ pub async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<(),
     Ok(())
 }
 
-pub async fn send_email(client: &EmailClient, recepient: SubscriberEmail) -> anyhow::Result<()> {
+pub async fn send_email(client: &EmailClient, subscriber: &NewSubscriber) -> anyhow::Result<()> {
+    let confirmation_link = "https://my-api.com/subscriptions/confirm";
     client
         .send_email(
-            recepient,
+            subscriber.email.clone(),
             "Welcome!",
-            "Welcome to our newsletter!",
-            "Welcome to our newsletter!",
+            &format!(
+                "Welcome to our newsletter!\nClink {} to confirm.",
+                confirmation_link
+            ),
+            &format!(
+                "Welcome to our newsletter!\nClink {} to confirm.",
+                confirmation_link
+            ),
         )
         .await
 }
