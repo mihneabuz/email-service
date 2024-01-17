@@ -19,6 +19,7 @@ pub struct SubscribeData {
 pub async fn subscribe(
     State(pool): State<Arc<PgPool>>,
     State(email): State<Arc<EmailClient>>,
+    State(base_url): State<Arc<str>>,
     Form(form): Form<SubscribeData>,
 ) -> StatusCode {
     info!("new subscriber {} <{}>", form.name, form.email);
@@ -31,7 +32,7 @@ pub async fn subscribe(
         Ok(()) => {
             info!("new subscriber saved");
 
-            match send_email(&email, &new_subscriber).await {
+            match send_email(&email, &new_subscriber, &base_url).await {
                 Ok(()) => {
                     info!("sent confirmation email");
                     StatusCode::OK
@@ -73,8 +74,13 @@ pub async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<(),
     Ok(())
 }
 
-pub async fn send_email(client: &EmailClient, subscriber: &NewSubscriber) -> anyhow::Result<()> {
-    let confirmation_link = "https://my-api.com/subscriptions/confirm";
+pub async fn send_email(
+    client: &EmailClient,
+    subscriber: &NewSubscriber,
+    base_url: &str,
+) -> anyhow::Result<()> {
+    let confirmation_link = format!("{}/subscriptions/confirm?subscription_token=token", base_url);
+
     client
         .send_email(
             subscriber.email.clone(),

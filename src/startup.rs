@@ -35,6 +35,7 @@ impl MakeRequestId for MakeUlidRequestId {
 pub struct AppState {
     db: Arc<PgPool>,
     email: Arc<EmailClient>,
+    base_url: Arc<str>,
 }
 
 impl FromRef<AppState> for Arc<PgPool> {
@@ -46,6 +47,12 @@ impl FromRef<AppState> for Arc<PgPool> {
 impl FromRef<AppState> for Arc<EmailClient> {
     fn from_ref(input: &AppState) -> Self {
         Arc::clone(&input.email)
+    }
+}
+
+impl FromRef<AppState> for Arc<str> {
+    fn from_ref(input: &AppState) -> Self {
+        Arc::clone(&input.base_url)
     }
 }
 
@@ -97,6 +104,7 @@ impl Application {
         let app = Router::new()
             .route("/health_check", get(routes::health_check))
             .route("/subscriptions", post(routes::subscribe))
+            .route("/subscriptions/confirm", get(routes::confirm))
             .layer(
                 ServiceBuilder::new()
                     .set_x_request_id(MakeUlidRequestId)
@@ -106,6 +114,7 @@ impl Application {
             .with_state(AppState {
                 db: Arc::new(connection_pool),
                 email: Arc::new(email_client),
+                base_url: Arc::from(configuration.application.base_url),
             });
 
         info!("starting server");
