@@ -4,8 +4,8 @@ use axum::{extract::State, http::StatusCode, Form};
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::Deserialize;
-use sqlx::types::Uuid;
-use sqlx::PgPool;
+use sqlx::{types::Uuid, PgExecutor};
+use sqlx::{Acquire, PgPool};
 use tracing::{error, info, warn};
 use ulid::Ulid;
 
@@ -29,7 +29,11 @@ pub async fn subscribe(
         return StatusCode::BAD_REQUEST;
     };
 
-    let id = match insert_subscriber(&pool, &new_subscriber).await {
+    let Ok(mut transaction) = pool.begin().await else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+
+    let id = match insert_subscriber(transaction.acquire().await.unwrap(), &new_subscriber).await {
         Ok(id) => id,
 
         Err(sqlx::Error::Database(e)) => {
@@ -47,7 +51,11 @@ pub async fn subscribe(
     };
 
     let token = generate_subscriptions_token();
-    let Ok(()) = store_token(&pool, id, &token).await else {
+    let Ok(()) = store_token(transaction.acquire().await.unwrap(), id, &token).await else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+
+    let Ok(()) = transaction.commit().await else {
         return StatusCode::INTERNAL_SERVER_ERROR;
     };
 
@@ -65,7 +73,10 @@ fn generate_subscriptions_token() -> String {
         .collect()
 }
 
-async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<Uuid, sqlx::Error> {
+async fn insert_subscriber(
+    db: impl PgExecutor<'_>,
+    sub: &NewSubscriber,
+) -> Result<Uuid, sqlx::Error> {
     let id = Uuid::from_bytes(Ulid::new().to_bytes());
 
     sqlx::query!(
@@ -78,14 +89,14 @@ async fn insert_subscriber(pool: &PgPool, sub: &NewSubscriber) -> Result<Uuid, s
         sub.name.as_ref(),
         Utc::now()
     )
-    .execute(pool)
+    .execute(db)
     .await?;
 
     Ok(id)
 }
 
 pub async fn store_token(
-    pool: &PgPool,
+    db: impl PgExecutor<'_>,
     subscriber_id: Uuid,
     subscription_token: &str,
 ) -> Result<(), sqlx::Error> {
@@ -97,7 +108,7 @@ pub async fn store_token(
         subscription_token,
         subscriber_id
     )
-    .execute(pool)
+    .execute(db)
     .await?;
 
     Ok(())
