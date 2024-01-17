@@ -464,6 +464,7 @@ dependencies = [
  "linkify",
  "once_cell",
  "quickcheck",
+ "rand 0.8.5",
  "reqwest",
  "secrecy",
  "serde",
