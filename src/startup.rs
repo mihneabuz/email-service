@@ -105,6 +105,7 @@ impl Application {
             .route("/health_check", get(routes::health_check))
             .route("/subscriptions", post(routes::subscribe))
             .route("/subscriptions/confirm", get(routes::confirm))
+            .route("/newsletters", post(routes::publish_newsletter))
             .layer(
                 ServiceBuilder::new()
                     .set_x_request_id(MakeUlidRequestId)

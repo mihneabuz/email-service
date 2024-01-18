@@ -40,7 +40,7 @@ pub async fn subscribe(
             warn!("database error: {:?}", e);
             return match e.kind() {
                 sqlx::error::ErrorKind::UniqueViolation => StatusCode::CONFLICT,
-                _ => StatusCode::BAD_REQUEST,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
             };
         }
 
@@ -127,7 +127,7 @@ async fn send_email(
 
     client
         .send_email(
-            subscriber.email.clone(),
+            &subscriber.email.clone(),
             "Welcome!",
             &format!(
                 "Welcome to our newsletter!\nClink {} to confirm.",
