@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Serialize;
-use sqlx::{Connection, Executor, PgConnection, PgPool};
+use sqlx::{types::Uuid, Connection, Executor, PgConnection, PgPool};
 use ulid::Ulid;
 use wiremock::MockServer;
 
@@ -93,6 +93,7 @@ impl TestApp {
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
         reqwest::Client::new()
             .post(&format!("{}/newsletters", &self.address))
+            .basic_auth(Uuid::new_v4().to_string(), Some(Uuid::new_v4().to_string()))
             .json(&body)
             .send()
             .await
