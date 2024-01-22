@@ -1,3 +1,4 @@
+use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Serialize;
@@ -30,6 +31,42 @@ pub struct TestApp {
     pub db: PgPool,
     pub http_client: Client,
     pub email_server: MockServer,
+    pub test_user: TestUser,
+}
+
+pub struct TestUser {
+    pub user_id: Uuid,
+    pub username: String,
+    pub password: String,
+}
+
+impl TestUser {
+    pub fn generate() -> Self {
+        Self {
+            user_id: Uuid::new_v4(),
+            username: Uuid::new_v4().to_string(),
+            password: Uuid::new_v4().to_string(),
+        }
+    }
+
+    async fn store(&self, pool: &PgPool) {
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = Argon2::default()
+            .hash_password(self.password.as_bytes(), &salt)
+            .unwrap()
+            .to_string();
+
+        sqlx::query!(
+            "INSERT INTO users (user_id, username, password_hash)
+            VALUES ($1, $2, $3)",
+            self.user_id,
+            self.username,
+            password_hash,
+        )
+        .execute(pool)
+        .await
+        .expect("Failed to store test user.");
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -62,7 +99,9 @@ pub async fn spawn_app() -> TestApp {
     tokio::spawn(server.run());
 
     let db = startup::get_connection_pool(&configuration.database).unwrap();
-    add_test_user(&db).await;
+
+    let test_user = TestUser::generate();
+    test_user.store(&db).await;
 
     TestApp {
         address,
@@ -70,22 +109,8 @@ pub async fn spawn_app() -> TestApp {
         db,
         http_client: Client::new(),
         email_server,
+        test_user,
     }
-}
-
-async fn add_test_user(pool: &PgPool) {
-    sqlx::query!(
-        r#"
-        INSERT INTO users (user_id, username, password)
-        VALUES ($1, $2, $3)
-        "#r,
-        Uuid::new_v4(),
-        Uuid::new_v4().to_string(),
-        Uuid::new_v4().to_string(),
-    )
-    .execute(pool)
-    .await
-    .expect("Failed to create test users.");
 }
 
 impl TestApp {
@@ -109,10 +134,9 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
-        let (test_user, test_pass) = self.test_user().await;
         reqwest::Client::new()
             .post(&format!("{}/newsletters", &self.address))
-            .basic_auth(test_user, Some(test_pass))
+            .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
             .send()
             .await
@@ -142,14 +166,6 @@ impl TestApp {
         let plain_text = get_link(&body["TextBody"].as_str().unwrap());
 
         ConfirmationLinks { html, plain_text }
-    }
-
-    pub async fn test_user(&self) -> (String, String) {
-        let row = sqlx::query!("SELECT username, password FROM users LIMIT 1")
-            .fetch_one(&self.db)
-            .await
-            .expect("Failed to create test users.");
-        (row.username, row.password)
     }
 }
 

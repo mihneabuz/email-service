@@ -11,6 +11,7 @@ path = "src/main.rs"
 name = "email-service"
 
 [dependencies]
+argon2 = { version = "0.5", features = ["std"] }
 anyhow = "1.0"
 axum = "0.7"
 base64 = "0.21"

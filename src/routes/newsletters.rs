@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -101,20 +102,41 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
 }
 
 async fn validate_credentials(credentials: Credentials, pool: &PgPool) -> Option<Uuid> {
-    let user_id: Option<_> = sqlx::query!(
+    let user = sqlx::query!(
         r#"
-        SELECT user_id
+        SELECT user_id, password_hash
         FROM users
-        WHERE username = $1 AND password = $2
+        WHERE username = $1
         "#,
         credentials.username,
-        credentials.password.expose_secret()
     )
     .fetch_optional(pool)
     .await
-    .ok()?;
+    .ok()??;
 
-    user_id.map(|row| row.user_id)
+    tokio::task::spawn_blocking(move || {
+        verify_password_hash(Secret::new(user.password_hash), credentials.password)
+    })
+    .await
+    .ok();
+
+    Some(user.user_id)
+}
+
+fn verify_password_hash(
+    expected_password_hash: Secret<String>,
+    password_candidate: Secret<String>,
+) -> Option<()> {
+    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret()).ok()?;
+
+    Argon2::default()
+        .verify_password(
+            password_candidate.expose_secret().as_bytes(),
+            &expected_password_hash,
+        )
+        .ok()?;
+
+    Some(())
 }
 
 struct ConfirmedSubscriber {
