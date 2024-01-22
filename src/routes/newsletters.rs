@@ -7,9 +7,9 @@ use axum::{
     Json,
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
-use secrecy::Secret;
+use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
-use sqlx::PgPool;
+use sqlx::{types::Uuid, PgPool};
 
 use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
@@ -30,7 +30,11 @@ pub async fn publish_newsletter(
     headers: HeaderMap,
     Json(body): Json<BodyData>,
 ) -> StatusCode {
-    let Ok(_credentials) = basic_authentication(&headers) else {
+    let Ok(credentials) = basic_authentication(&headers) else {
+        return StatusCode::UNAUTHORIZED;
+    };
+
+    let Some(_user_id) = validate_credentials(credentials, &pool).await else {
         return StatusCode::UNAUTHORIZED;
     };
 
@@ -94,6 +98,23 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
         username,
         password: Secret::new(password),
     })
+}
+
+async fn validate_credentials(credentials: Credentials, pool: &PgPool) -> Option<Uuid> {
+    let user_id: Option<_> = sqlx::query!(
+        r#"
+        SELECT user_id
+        FROM users
+        WHERE username = $1 AND password = $2
+        "#,
+        credentials.username,
+        credentials.password.expose_secret()
+    )
+    .fetch_optional(pool)
+    .await
+    .ok()?;
+
+    user_id.map(|row| row.user_id)
 }
 
 struct ConfirmedSubscriber {
