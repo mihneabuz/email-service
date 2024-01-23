@@ -118,7 +118,7 @@ async fn validate_credentials(credentials: Credentials, pool: &PgPool) -> Option
         verify_password_hash(Secret::new(user.password_hash), credentials.password)
     })
     .await
-    .ok();
+    .ok()??;
 
     Some(user.user_id)
 }
