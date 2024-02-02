@@ -103,7 +103,8 @@ impl Application {
 
         let app = Router::new()
             .route("/", get(routes::home))
-            .route("/login", get(routes::login))
+            .route("/login", get(routes::login_get))
+            .route("/login", post(routes::login_post))
             .route("/health_check", get(routes::health_check))
             .route("/subscriptions", post(routes::subscribe))
             .route("/subscriptions/confirm", get(routes::confirm))

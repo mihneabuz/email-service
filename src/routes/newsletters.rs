@@ -1,18 +1,21 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     Json,
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
-use secrecy::{ExposeSecret, Secret};
+use secrecy::Secret;
 use serde::Deserialize;
-use sqlx::{types::Uuid, PgPool};
+use sqlx::PgPool;
 
-use crate::{domain::SubscriberEmail, email_client::EmailClient};
+use crate::{
+    authentication::{validate_credentials, Credentials},
+    domain::SubscriberEmail,
+    email_client::EmailClient,
+};
 
 #[derive(Deserialize)]
 pub struct BodyData {
@@ -61,11 +64,6 @@ pub async fn publish_newsletter(
     StatusCode::OK
 }
 
-struct Credentials {
-    username: String,
-    password: Secret<String>,
-}
-
 fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
     let header_value = headers
         .get("Authorization")
@@ -99,44 +97,6 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
         username,
         password: Secret::new(password),
     })
-}
-
-async fn validate_credentials(credentials: Credentials, pool: &PgPool) -> Option<Uuid> {
-    let user = sqlx::query!(
-        r#"
-        SELECT user_id, password_hash
-        FROM users
-        WHERE username = $1
-        "#,
-        credentials.username,
-    )
-    .fetch_optional(pool)
-    .await
-    .ok()??;
-
-    tokio::task::spawn_blocking(move || {
-        verify_password_hash(Secret::new(user.password_hash), credentials.password)
-    })
-    .await
-    .ok()??;
-
-    Some(user.user_id)
-}
-
-fn verify_password_hash(
-    expected_password_hash: Secret<String>,
-    password_candidate: Secret<String>,
-) -> Option<()> {
-    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret()).ok()?;
-
-    Argon2::default()
-        .verify_password(
-            password_candidate.expose_secret().as_bytes(),
-            &expected_password_hash,
-        )
-        .ok()?;
-
-    Some(())
 }
 
 struct ConfirmedSubscriber {
