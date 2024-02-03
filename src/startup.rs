@@ -7,6 +7,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use secrecy::Secret;
 use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -36,6 +37,7 @@ pub struct AppState {
     db: Arc<PgPool>,
     email: Arc<EmailClient>,
     base_url: Arc<str>,
+    hmac_secret: Arc<Secret<String>>,
 }
 
 impl FromRef<AppState> for Arc<PgPool> {
@@ -53,6 +55,12 @@ impl FromRef<AppState> for Arc<EmailClient> {
 impl FromRef<AppState> for Arc<str> {
     fn from_ref(input: &AppState) -> Self {
         Arc::clone(&input.base_url)
+    }
+}
+
+impl FromRef<AppState> for Arc<Secret<String>> {
+    fn from_ref(input: &AppState) -> Self {
+        Arc::clone(&input.hmac_secret)
     }
 }
 
@@ -119,6 +127,7 @@ impl Application {
                 db: Arc::new(connection_pool),
                 email: Arc::new(email_client),
                 base_url: Arc::from(configuration.application.base_url),
+                hmac_secret: Arc::new(configuration.application.hmac_secret),
             });
 
         info!("starting server");

@@ -8,11 +8,14 @@ use serde::Deserialize;
 use sqlx::{types::Uuid, PgPool};
 
 #[derive(Deserialize)]
-pub struct Parameters {
+pub struct ConfirmParameters {
     subscription_token: String,
 }
 
-pub async fn confirm(State(pool): State<Arc<PgPool>>, params: Query<Parameters>) -> StatusCode {
+pub async fn confirm(
+    State(pool): State<Arc<PgPool>>,
+    params: Query<ConfirmParameters>,
+) -> StatusCode {
     let id = match get_subscriber_id_from_token(&pool, &params.subscription_token).await {
         Ok(id) => id,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
@@ -30,7 +33,7 @@ pub async fn confirm(State(pool): State<Arc<PgPool>>, params: Query<Parameters>)
     }
 }
 
-pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<(), sqlx::Error> {
+async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE subscriptions SET status = 'confirmed' WHERE id = $1"#,
         subscriber_id,
@@ -41,7 +44,7 @@ pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<()
     Ok(())
 }
 
-pub async fn get_subscriber_id_from_token(
+async fn get_subscriber_id_from_token(
     pool: &PgPool,
     subscription_token: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
