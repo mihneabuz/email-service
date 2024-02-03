@@ -37,7 +37,7 @@ pub struct AppState {
     db: Arc<PgPool>,
     email: Arc<EmailClient>,
     base_url: Arc<str>,
-    hmac_secret: Arc<Secret<String>>,
+    secret: Arc<Secret<String>>,
 }
 
 impl FromRef<AppState> for Arc<PgPool> {
@@ -60,7 +60,7 @@ impl FromRef<AppState> for Arc<str> {
 
 impl FromRef<AppState> for Arc<Secret<String>> {
     fn from_ref(input: &AppState) -> Self {
-        Arc::clone(&input.hmac_secret)
+        Arc::clone(&input.secret)
     }
 }
 
@@ -127,7 +127,7 @@ impl Application {
                 db: Arc::new(connection_pool),
                 email: Arc::new(email_client),
                 base_url: Arc::from(configuration.application.base_url),
-                hmac_secret: Arc::new(configuration.application.hmac_secret),
+                secret: Arc::new(configuration.application.secret),
             });
 
         info!("starting server");

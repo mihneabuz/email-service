@@ -1,7 +1,7 @@
 application:
   host: 127.0.0.1
   port: 3000
-  hmac_secret: "super-long-and-secret-random-key-needed-to-verify-message-integrity"
+  secret: "my-long-secret-shhhhh"
 
 database:
   host: "127.0.0.1"
