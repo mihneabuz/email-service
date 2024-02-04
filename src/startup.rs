@@ -136,8 +136,9 @@ impl Application {
             .route("/subscriptions", post(routes::subscribe))
             .route("/subscriptions/confirm", get(routes::confirm))
             .route("/newsletters", post(routes::publish_newsletter))
-            .layer(uuid_layer)
+            .route("/admin/dashboard", get(routes::admin_dashboard))
             .layer(session_layer)
+            .layer(uuid_layer)
             .with_state(AppState {
                 db: Arc::new(connection_pool),
                 email: Arc::new(email_client),
