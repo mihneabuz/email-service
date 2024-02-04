@@ -9,11 +9,17 @@ use axum::{
 };
 use secrecy::Secret;
 use sqlx::PgPool;
+use time::Duration;
 use tower::ServiceBuilder;
 use tower_http::{
     request_id::{MakeRequestId, RequestId},
     trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     ServiceBuilderExt,
+};
+use tower_sessions::{Expiry, SessionManagerLayer};
+use tower_sessions_redis_store::{
+    fred::{clients::RedisPool, interfaces::ClientLike, types::RedisConfig},
+    RedisStore,
 };
 use tracing::info;
 use ulid::Ulid;
@@ -109,6 +115,19 @@ impl Application {
                     .level(tracing::Level::INFO),
             );
 
+        let uuid_layer = ServiceBuilder::new()
+            .set_x_request_id(MakeUlidRequestId)
+            .layer(trace_layer)
+            .propagate_x_request_id();
+
+        let redis_pool = RedisPool::new(RedisConfig::default(), None, None, None, 6)?;
+        redis_pool.connect();
+        redis_pool.wait_for_connect().await?;
+
+        let session_store = RedisStore::new(redis_pool);
+        let session_layer = SessionManagerLayer::new(session_store)
+            .with_expiry(Expiry::OnInactivity(Duration::MINUTE));
+
         let app = Router::new()
             .route("/", get(routes::home))
             .route("/login", get(routes::login_get))
@@ -117,12 +136,8 @@ impl Application {
             .route("/subscriptions", post(routes::subscribe))
             .route("/subscriptions/confirm", get(routes::confirm))
             .route("/newsletters", post(routes::publish_newsletter))
-            .layer(
-                ServiceBuilder::new()
-                    .set_x_request_id(MakeUlidRequestId)
-                    .layer(trace_layer)
-                    .propagate_x_request_id(),
-            )
+            .layer(uuid_layer)
+            .layer(session_layer)
             .with_state(AppState {
                 db: Arc::new(connection_pool),
                 email: Arc::new(email_client),
