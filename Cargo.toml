@@ -13,6 +13,7 @@ name = "email-service"
 [dependencies]
 argon2 = { version = "0.5", features = ["std"] }
 anyhow = "1.0"
+async-trait = "0.1"
 axum = "0.7"
 axum-extra = { version = "0.9", features = ["cookie"] }
 base64 = "0.21"

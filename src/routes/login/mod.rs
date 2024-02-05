@@ -10,9 +10,11 @@ use axum_extra::extract::{cookie::Cookie, CookieJar};
 use secrecy::Secret;
 use sqlx::PgPool;
 use time::Duration;
-use tower_sessions::Session;
 
-use crate::authentication::{validate_credentials, Credentials};
+use crate::{
+    authentication::{validate_credentials, Credentials},
+    session_state::TypedSession,
+};
 
 pub async fn login_get(cookies: CookieJar) -> impl IntoResponse {
     let error_html = match cookies.get("_flash") {
@@ -63,7 +65,7 @@ pub struct FormData {
 }
 
 pub async fn login_post(
-    session: Session,
+    session: TypedSession,
     State(pool): State<Arc<PgPool>>,
     Form(form): Form<FormData>,
 ) -> Response<Body> {
@@ -74,8 +76,8 @@ pub async fn login_post(
 
     match validate_credentials(credentials, &pool).await {
         Some(user_id) => {
-            session.cycle_id().await.unwrap();
-            session.insert("user_id", user_id).await.unwrap();
+            session.renew().await.unwrap();
+            session.insert_user_id(user_id).await.unwrap();
 
             Redirect::to("/admin/dashboard").into_response()
         }

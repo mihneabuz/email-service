@@ -4,20 +4,24 @@ use axum::{
     body::Body,
     extract::State,
     http::StatusCode,
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use sqlx::{types::Uuid, PgPool};
-use tower_sessions::Session;
 
-pub async fn admin_dashboard(State(pool): State<Arc<PgPool>>, session: Session) -> Response<Body> {
-    let Ok(user_id) = session.get::<Uuid>("user_id").await else {
+use crate::session_state::TypedSession;
+
+pub async fn admin_dashboard(
+    State(pool): State<Arc<PgPool>>,
+    session: TypedSession,
+) -> Response<Body> {
+    let Ok(user_id) = session.get_user_id().await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
 
     let username = if let Some(user_id) = user_id {
         get_username(user_id, &pool).await.unwrap()
     } else {
-        todo!();
+        return Redirect::to("/login").into_response();
     };
 
     Html::from(format!(
