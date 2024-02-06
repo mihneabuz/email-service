@@ -19,6 +19,10 @@ impl TypedSession {
     pub async fn get_user_id(&self) -> Result<Option<Uuid>, Error> {
         self.0.get(Self::USER_ID_KEY).await
     }
+
+    pub async fn log_out(self) -> Result<(), Error> {
+        self.0.delete().await
+    }
 }
 
 #[async_trait]

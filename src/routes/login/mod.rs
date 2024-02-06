@@ -29,32 +29,31 @@ pub async fn login_get(cookies: CookieJar) -> impl IntoResponse {
 
     let html = Html::from(format!(
         r#"
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta http-equiv="content-type" content="text/html; charset=utf-8">
-        <title>Login</title>
-    </head>
-    <body>
-        {error_html}
-        <form action="/login" method="post">
-            <label>Username
-            <input type="text" placeholder="Enter Username" name="username">
-            </label>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta http-equiv="content-type" content="text/html; charset=utf-8">
+            <title>Login</title>
+        </head>
+        <body>
+            {error_html}
+            <form action="/login" method="post">
+                <label>Username
+                <input type="text" placeholder="Enter Username" name="username">
+                </label>
 
-            <label>Password
-            <input type="password" placeholder="Enter Password" name="password">
-            </label>
+                <label>Password
+                <input type="password" placeholder="Enter Password" name="password">
+                </label>
 
-            <button type="submit">Login</button>
-        </form>
-    </body>
-    </html>
+                <button type="submit">Login</button>
+            </form>
+        </body>
+        </html>
     "#
     ));
 
     let cookie = Cookie::build(("_flash", "")).max_age(Duration::ZERO);
-
     (CookieJar::new().add(cookie), html).into_response()
 }
 
