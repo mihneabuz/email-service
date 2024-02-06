@@ -6,13 +6,13 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response},
     Form,
 };
-use axum_extra::extract::CookieJar;
+use axum_extra::extract::{cookie::Cookie, CookieJar};
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
-use tower_sessions::cookie::Cookie;
+use time::Duration;
 
 use crate::{
-    authentication::{validate_credentials, Credentials},
+    authentication::{self, validate_credentials, Credentials},
     routes::admin::get_username,
     session_state::TypedSession,
 };
@@ -32,7 +32,7 @@ pub async fn change_password_form(cookies: CookieJar, session: TypedSession) -> 
         }
     };
 
-    Html::from(format!(
+    let html = Html::from(format!(
         r#"
         <!DOCTYPE html>
         <html lang="en">
@@ -64,7 +64,10 @@ pub async fn change_password_form(cookies: CookieJar, session: TypedSession) -> 
         </body>
         </html>
         "#,
-    )).into_response()
+    ));
+
+    let cookie = Cookie::build(("_flash", "")).max_age(Duration::ZERO);
+    (CookieJar::new().add(cookie), html).into_response()
 }
 
 #[derive(serde::Deserialize)]
@@ -123,5 +126,17 @@ pub async fn change_password(
             .into_response();
     }
 
-    todo!()
+    if authentication::change_password(user_id, form.new_password, &pool)
+        .await
+        .is_none()
+    {
+        return Redirect::to("/admin/password").into_response();
+    }
+
+    let cookie = Cookie::new("_flash", "Your password has been changed.");
+    (
+        CookieJar::new().add(cookie),
+        Redirect::to("/admin/password"),
+    )
+        .into_response()
 }

@@ -80,6 +80,7 @@ pub async fn login_post(
 
             Redirect::to("/admin/dashboard").into_response()
         }
+
         None => {
             let cookie = Cookie::new("_flash", "Authentication failed");
             (CookieJar::new().add(cookie), Redirect::to("/login")).into_response()

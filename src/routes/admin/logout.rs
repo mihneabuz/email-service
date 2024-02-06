@@ -2,7 +2,7 @@ use axum::{
     body::Body,
     response::{IntoResponse, Redirect, Response},
 };
-use tower_sessions::cookie::{Cookie, CookieJar};
+use axum_extra::extract::cookie::{Cookie, CookieJar};
 
 use crate::session_state::TypedSession;
 

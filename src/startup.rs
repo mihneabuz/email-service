@@ -139,7 +139,7 @@ impl Application {
             .route("/admin/dashboard", get(routes::admin_dashboard))
             .route("/admin/password", get(routes::change_password_form))
             .route("/admin/password", post(routes::change_password))
-            .route("/admin/logout", post(routes::log_out))
+            .route("/logout", post(routes::log_out))
             .layer(session_layer)
             .layer(uuid_layer)
             .with_state(AppState {
