@@ -1,7 +1,40 @@
-use crate::helpers::{spawn_app, ConfirmationLinks, TestApp};
-use sqlx::types::Uuid;
+use crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp};
+
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, ResponseTemplate};
+
+#[tokio::test]
+async fn you_must_be_logged_in_to_see_the_newsletter_form() {
+    let app = spawn_app().await;
+    let response = app.get_newsletter_form().await;
+
+    assert_is_redirect_to(&response, "/login");
+
+    let login_body = serde_json::json!({
+        "username": &app.test_user.username,
+        "password": &app.test_user.password
+    });
+
+    app.post_login(&login_body).await;
+
+    let response = app.get_newsletter_form().await;
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
+async fn you_must_be_logged_in_to_send_a_newsletter_form() {
+    let app = spawn_app().await;
+
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter title",
+        "text_content": "Newsletter body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
+    });
+
+    let response = app.post_newsletters(newsletter_request_body).await;
+
+    assert_is_redirect_to(&response, "/login");
+}
 
 #[tokio::test]
 async fn newsletters_returns_400_for_invalid_data() {
@@ -10,16 +43,24 @@ async fn newsletters_returns_400_for_invalid_data() {
     let test_cases = vec![
         (
             serde_json::json!({
-                "content": {
-                    "text": "Newsletter body as plain text",
-                    "html": "<p>Newsletter body as HTML</p>",
-                }
+                "text_content": "Newsletter body as plain text",
+                "html_content": "<p>Newsletter body as HTML</p>",
             }),
             "missing title",
         ),
         (
-            serde_json::json!({"title": "Newsletter!"}),
-            "missing content",
+            serde_json::json!({
+                "title": "Newsletter!",
+                "html_content": "<p>Newsletter body as HTML</p>",
+            }),
+            "missing text_content",
+        ),
+        (
+            serde_json::json!({
+                "title": "Newsletter!",
+                "text_content": "Newsletter body as plain text",
+            }),
+            "missing html_content",
         ),
     ];
 
@@ -39,6 +80,13 @@ async fn newsletters_returns_400_for_invalid_data() {
 async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
     let app = spawn_app().await;
 
+    let login_body = serde_json::json!({
+        "username": &app.test_user.username,
+        "password": &app.test_user.password
+    });
+
+    app.post_login(&login_body).await;
+
     create_unconfirmed_subscriber(&app).await;
 
     Mock::given(any())
@@ -49,10 +97,8 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
-        "content": {
-            "text": "Newsletter body as plain text",
-            "html": "<p>Newsletter body as HTML</p>",
-        }
+        "text_content": "Newsletter body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
     });
 
     let response = app.post_newsletters(newsletter_request_body).await;
@@ -63,6 +109,13 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 #[tokio::test]
 async fn newsletters_are_delivered_to_confirmed_subscribers() {
     let app = spawn_app().await;
+
+    let login_body = serde_json::json!({
+        "username": &app.test_user.username,
+        "password": &app.test_user.password
+    });
+
+    app.post_login(&login_body).await;
 
     create_confirmed_subscriber(&app).await;
 
@@ -75,84 +128,12 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
 
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
-        "content": {
-            "text": "Newsletter body as plain text",
-            "html": "<p>Newsletter body as HTML</p>",
-        }
+        "text_content": "Newsletter body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
     });
 
     let response = app.post_newsletters(newsletter_request_body).await;
-
     assert_eq!(response.status().as_u16(), 200);
-}
-
-#[tokio::test]
-async fn requests_missing_authorization_are_rejected() {
-    let app = spawn_app().await;
-
-    let response = reqwest::Client::new()
-        .post(&format!("{}/newsletters", &app.address))
-        .json(&serde_json::json!({
-            "title": "Newsletter title",
-            "content": {
-                "text": "Newsletter body as plain text",
-                "html": "<p>Newsletter body as HTML</p>",
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
-    assert_eq!(401, response.status().as_u16());
-}
-
-#[tokio::test]
-async fn non_existing_user_is_rejected() {
-    let app = spawn_app().await;
-
-    let username = Uuid::new_v4().to_string();
-    let password = Uuid::new_v4().to_string();
-
-    let response = reqwest::Client::new()
-        .post(&format!("{}/newsletters", &app.address))
-        .basic_auth(username, Some(password))
-        .json(&serde_json::json!({
-            "title": "Newsletter title",
-            "content": {
-                "text": "Newsletter body as plain text",
-                "html": "<p>Newsletter body as HTML</p>",
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
-    assert_eq!(401, response.status().as_u16());
-}
-
-#[tokio::test]
-async fn invalid_password_is_rejected() {
-    let app = spawn_app().await;
-
-    let username = &app.test_user.username;
-    let password = Uuid::new_v4().to_string();
-    assert_ne!(app.test_user.password, password);
-
-    let response = reqwest::Client::new()
-        .post(&format!("{}/newsletters", &app.address))
-        .basic_auth(username, Some(password))
-        .json(&serde_json::json!({
-            "title": "Newsletter title",
-            "content": {
-                "text": "Newsletter body as plain text",
-                "html": "<p>Newsletter body as HTML</p>",
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
-    assert_eq!(401, response.status().as_u16());
 }
 
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
