@@ -10,12 +10,7 @@ async fn you_must_be_logged_in_to_see_the_newsletter_form() {
 
     assert_is_redirect_to(&response, "/login");
 
-    let login_body = serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password
-    });
-
-    app.post_login(&login_body).await;
+    app.test_user.login(&app).await;
 
     let response = app.get_newsletter_form().await;
     assert_eq!(response.status(), 200);
@@ -80,12 +75,7 @@ async fn newsletters_returns_400_for_invalid_data() {
 async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
     let app = spawn_app().await;
 
-    let login_body = serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password
-    });
-
-    app.post_login(&login_body).await;
+    app.test_user.login(&app).await;
 
     create_unconfirmed_subscriber(&app).await;
 
@@ -110,12 +100,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 async fn newsletters_are_delivered_to_confirmed_subscribers() {
     let app = spawn_app().await;
 
-    let login_body = serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password
-    });
-
-    app.post_login(&login_body).await;
+    app.test_user.login(&app).await;
 
     create_confirmed_subscriber(&app).await;
 

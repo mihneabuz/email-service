@@ -67,6 +67,15 @@ impl TestUser {
         .await
         .expect("Failed to store test user.");
     }
+
+    pub async fn login(&self, app: &TestApp) {
+        let login_body = serde_json::json!({
+            "username": &self.username,
+            "password": &self.password
+        });
+
+        app.post_login(&login_body).await;
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -145,6 +154,10 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to execute request.")
+    }
+
+    pub async fn get_newsletter_form_html(&self) -> String {
+        self.get_newsletter_form().await.text().await.unwrap()
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
