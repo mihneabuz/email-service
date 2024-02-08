@@ -24,6 +24,7 @@ async fn you_must_be_logged_in_to_send_a_newsletter_form() {
         "title": "Newsletter title",
         "text_content": "Newsletter body as plain text",
         "html_content": "<p>Newsletter body as HTML</p>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     let response = app.post_newsletters(newsletter_request_body).await;
@@ -40,6 +41,7 @@ async fn newsletters_returns_400_for_invalid_data() {
             serde_json::json!({
                 "text_content": "Newsletter body as plain text",
                 "html_content": "<p>Newsletter body as HTML</p>",
+                "idempotency_key": uuid::Uuid::new_v4().to_string()
             }),
             "missing title",
         ),
@@ -47,6 +49,7 @@ async fn newsletters_returns_400_for_invalid_data() {
             serde_json::json!({
                 "title": "Newsletter!",
                 "html_content": "<p>Newsletter body as HTML</p>",
+                "idempotency_key": uuid::Uuid::new_v4().to_string()
             }),
             "missing text_content",
         ),
@@ -54,8 +57,17 @@ async fn newsletters_returns_400_for_invalid_data() {
             serde_json::json!({
                 "title": "Newsletter!",
                 "text_content": "Newsletter body as plain text",
+                "idempotency_key": uuid::Uuid::new_v4().to_string()
             }),
             "missing html_content",
+        ),
+        (
+            serde_json::json!({
+                "title": "Newsletter!",
+                "text_content": "Newsletter body as plain text",
+                "html_content": "<p>Newsletter body as HTML</p>",
+            }),
+            "missing idempotency_key",
         ),
     ];
 
@@ -89,6 +101,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
         "title": "Newsletter title",
         "text_content": "Newsletter body as plain text",
         "html_content": "<p>Newsletter body as HTML</p>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     let response = app.post_newsletters(newsletter_request_body).await;
@@ -115,9 +128,42 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
         "title": "Newsletter title",
         "text_content": "Newsletter body as plain text",
         "html_content": "<p>Newsletter body as HTML</p>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     let response = app.post_newsletters(newsletter_request_body).await;
+    assert_eq!(response.status().as_u16(), 200);
+}
+
+#[tokio::test]
+async fn newsletter_creation_is_idempotent() {
+    let app = spawn_app().await;
+
+    app.test_user.login(&app).await;
+
+    create_confirmed_subscriber(&app).await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter title",
+        "text_content": "Newsletter body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
+    });
+
+    let response = app.post_newsletters(newsletter_request_body.clone()).await;
+    assert_eq!(response.status().as_u16(), 200);
+
+    let response = app.post_newsletters(newsletter_request_body.clone()).await;
+    assert_eq!(response.status().as_u16(), 200);
+
+    let response = app.post_newsletters(newsletter_request_body.clone()).await;
     assert_eq!(response.status().as_u16(), 200);
 }
 

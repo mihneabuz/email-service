@@ -598,6 +598,7 @@ dependencies = [
  "claim",
  "config",
  "fake",
+ "futures",
  "htmlescape",
  "linkify",
  "once_cell",

@@ -11,7 +11,12 @@ use axum::{
 use serde::Deserialize;
 use sqlx::PgPool;
 
-use crate::{domain::SubscriberEmail, email_client::EmailClient, session_state::TypedSession};
+use crate::{
+    domain::SubscriberEmail,
+    email_client::EmailClient,
+    idempotency::{get_saved_response, save_response, IdempotencyKey},
+    session_state::TypedSession,
+};
 
 pub async fn newsletter_form(session: TypedSession) -> Response<Body> {
     if session.get_user_id().await.unwrap().is_none() {
@@ -58,6 +63,7 @@ pub struct BodyData {
     title: String,
     text_content: String,
     html_content: String,
+    idempotency_key: String,
 }
 
 pub async fn publish_newsletter(
@@ -66,8 +72,13 @@ pub async fn publish_newsletter(
     State(client): State<Arc<EmailClient>>,
     Json(body): Json<BodyData>,
 ) -> Response<Body> {
-    if session.get_user_id().await.unwrap().is_none() {
+    let Some(user_id) = session.get_user_id().await.unwrap() else {
         return Redirect::to("/login").into_response();
+    };
+
+    let idempotency_key = IdempotencyKey::try_from(body.idempotency_key).unwrap();
+    if let Some(saved_response) = get_saved_response(&pool, &idempotency_key, user_id).await {
+        return saved_response;
     }
 
     let Ok(subscribers) = get_confirmed_subscribers(&pool).await else {
@@ -89,7 +100,10 @@ pub async fn publish_newsletter(
         }
     }
 
-    StatusCode::OK.into_response()
+    let response = StatusCode::OK.into_response();
+    save_response(&pool, &idempotency_key, user_id, response)
+        .await
+        .unwrap()
 }
 
 struct ConfirmedSubscriber {
