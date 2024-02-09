@@ -14,7 +14,7 @@ use sqlx::PgPool;
 use crate::{
     domain::SubscriberEmail,
     email_client::EmailClient,
-    idempotency::{get_saved_response, save_response, IdempotencyKey},
+    idempotency::{save_response, try_processing, IdempotencyKey, NextAction},
     session_state::TypedSession,
 };
 
@@ -77,33 +77,37 @@ pub async fn publish_newsletter(
     };
 
     let idempotency_key = IdempotencyKey::try_from(body.idempotency_key).unwrap();
-    if let Some(saved_response) = get_saved_response(&pool, &idempotency_key, user_id).await {
-        return saved_response;
-    }
+    match try_processing(&pool, &idempotency_key, user_id).await {
+        Some(NextAction::StartProcessing(transaction)) => {
+            let Ok(subscribers) = get_confirmed_subscribers(&pool).await else {
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            };
 
-    let Ok(subscribers) = get_confirmed_subscribers(&pool).await else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    };
+            for subscriber in subscribers.into_iter().filter_map(|res| res.ok()) {
+                if client
+                    .send_email(
+                        &subscriber.email,
+                        &body.title,
+                        &body.html_content,
+                        &body.text_content,
+                    )
+                    .await
+                    .is_err()
+                {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            }
 
-    for subscriber in subscribers.into_iter().filter_map(|res| res.ok()) {
-        if client
-            .send_email(
-                &subscriber.email,
-                &body.title,
-                &body.html_content,
-                &body.text_content,
-            )
-            .await
-            .is_err()
-        {
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            let response = StatusCode::OK.into_response();
+            save_response(transaction, &idempotency_key, user_id, response)
+                .await
+                .unwrap()
         }
-    }
 
-    let response = StatusCode::OK.into_response();
-    save_response(&pool, &idempotency_key, user_id, response)
-        .await
-        .unwrap()
+        Some(NextAction::ReturnSavedResponse(saved_response)) => saved_response,
+
+        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 struct ConfirmedSubscriber {

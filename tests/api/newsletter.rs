@@ -167,6 +167,39 @@ async fn newsletter_creation_is_idempotent() {
     assert_eq!(response.status().as_u16(), 200);
 }
 
+#[tokio::test]
+async fn concurrent_form_submission_is_handled_gracefully() {
+    let app = spawn_app().await;
+
+    create_confirmed_subscriber(&app).await;
+
+    app.test_user.login(&app).await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(1)))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter title",
+        "text_content": "Newsletter body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
+    });
+
+    let response1 = app.post_newsletters(newsletter_request_body.clone());
+    let response2 = app.post_newsletters(newsletter_request_body.clone());
+    let (response1, response2) = tokio::join!(response1, response2);
+
+    assert_eq!(response1.status(), response2.status());
+    assert_eq!(
+        response1.text().await.unwrap(),
+        response2.text().await.unwrap()
+    );
+}
+
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
     let _mock_guard = Mock::given(path("/email"))
         .and(method("POST"))
